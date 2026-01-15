@@ -73,6 +73,19 @@ export function AuthForm({ type, action }: AuthFormProps) {
           {state?.error && (
             <p className="text-sm text-red-500 font-medium">{state.error}</p>
           )}
+          {state?.success && (
+            <div className="space-y-2">
+              <p className="text-sm text-green-600 font-medium">
+                {state.success}
+              </p>
+              <Link
+                href="/login"
+                className="text-sm text-primary hover:underline"
+              >
+                Go to Login
+              </Link>
+            </div>
+          )}
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
           <Button className="w-full" type="submit" disabled={isPending}>

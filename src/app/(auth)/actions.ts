@@ -29,21 +29,20 @@ export async function register(
   formData: FormData
 ) {
   const supabase = await createSupabaseServerClient();
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
+  const email = String(formData.get("email") ?? "");
+  const password = String(formData.get("password") ?? "");
 
-  const { error } = await supabase.auth.signUp({
-    email,
-    password,
-  });
+  const { error } = await supabase.auth.signUp({ email, password });
 
   if (error) {
     return { error: error.message };
   }
 
-  // Depending on your Supabase config, this might require email verification
-  // For this demo, we assume we can redirect or the user is auto-logged in
-  redirect("/dashboard");
+  return {
+    error: "",
+    success:
+      "Check your email to confirm your account, then you’ll be redirected to the dashboard.",
+  };
 }
 
 export async function signOut() {
