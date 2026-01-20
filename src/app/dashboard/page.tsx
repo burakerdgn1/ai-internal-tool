@@ -86,7 +86,7 @@ export default async function DashboardPage() {
                       {formatStatus(task.status)}
                     </span>
                     <span>
-                      {new Date(task.created_at).toLocaleDateString()}
+                      {new Date(task.created_at).toISOString().slice(0, 10)}
                     </span>
                   </div>
 
