@@ -1,7 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE" | "ARCHIVED";
-export type TaskPriority = 1 | 2 | 3;
 
 export type Task = {
   id: string;
@@ -9,17 +8,18 @@ export type Task = {
   title: string;
   description: string | null;
   status: TaskStatus;
-  priority: TaskPriority;
-  ai_summary: string | null;
+  priority: number; // 1|2|3
   created_at: string;
+  ai_summary: string | null;
 };
 
-export async function getUserTasks(): Promise<Task[]> {
+export async function getUserTasks() {
   const supabase = await createSupabaseServerClient();
 
+  // RLS ensures we only get our own tasks
   const { data, error } = await supabase
     .from("tasks")
-    .select("id,user_id,title,description,status,priority,ai_summary,created_at")
+    .select("*")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -27,5 +27,5 @@ export async function getUserTasks(): Promise<Task[]> {
     return [];
   }
 
-  return (data ?? []) as Task[];
+  return data as Task[];
 }
