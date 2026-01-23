@@ -20,7 +20,15 @@ export async function summarizeTaskText(input: {
     ? `Title: ${input.title}\nDescription: ${input.description}`
     : `Title: ${input.title}`;
 
-  const prompt = `Summarize the following task in 2-3 concise, professional sentences. Do not use bullet points.\n\n${taskContent}`;
+  const prompt = `
+You are helping inside an internal task manager.
+Write a concise summary in 2 sentences max.
+No bullet points. No extra advice. No titles.
+Focus only on what the task is and what "done" means.
+
+Task:
+${taskContent}
+`.trim();
 
   try {
     const response = await ai.models.generateContent({
