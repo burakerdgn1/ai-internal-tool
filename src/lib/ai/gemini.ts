@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 
 // Using 'gemini-1.5-pro' as the current production standard.
 // Change to 'gemini-3-pro' when available/applicable.
-const GEMINI_MODEL_ID = "gemini-1.5-pro";
+const GEMINI_MODEL_ID = "gemini-2.0-flash";
 
 export async function summarizeTaskText(input: {
   title: string;
