@@ -37,16 +37,21 @@ ${taskContent}
     });
 
     // The @google/genai SDK provides the text directly on the response object
-    const summary = response.text?.trim();
+    const summary = (response.text ?? "").trim();
 
     if (!summary) {
-      throw new Error("Gemini returned empty summary");
+      throw new Error("EMPTY_GEMINI_RESPONSE");
     }
 
     return summary;
   } catch (error) {
     // Rethrow with a clean message for the UI/Service layer
-    console.error("Gemini summarization failed:", error);
-    throw new Error("Failed to generate task summary");
+    console.error("Gemini summarization failed", {
+      error,
+      model: GEMINI_MODEL_ID,
+      promptPreview: prompt.slice(0, 120),
+    });
+
+    throw new Error("AI processing failed");
   }
 }
