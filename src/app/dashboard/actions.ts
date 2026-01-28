@@ -3,6 +3,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { summarizeTaskText } from "@/lib/ai/gemini";
+import { TaskPriority, TaskStatus } from "@/lib/tasks";
 
 export type ActionState = {
   error?: string;
@@ -24,9 +25,10 @@ export async function createTask(
   }
 
   const title = formData.get("title") as string;
-  const description = formData.get("description") as string;
-  const status = formData.get("status") as string;
-  const priority = formData.get("priority") as string;
+  const rawDescription = formData.get("description") as string;
+  const description = rawDescription?.trim() ? rawDescription.trim() : null;
+  const status = formData.get("status") as TaskStatus;
+  const priority = Number(formData.get("priority")) as TaskPriority;
 
   if (!title) {
     return { error: "Title is required" };
@@ -95,4 +97,53 @@ export async function summarizeTask(taskId: string): Promise<ActionState> {
     console.error(err);
     return { error: "AI processing failed" };
   }
+}
+
+export async function updateTaskStatusAction(
+  taskId: string,
+  status: TaskStatus,
+): Promise<ActionState> {
+  const supabase = await createSupabaseServerClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+
+  // Update with ownership check
+  const { error } = await supabase
+    .from("tasks")
+    .update({ status })
+    .eq("id", taskId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function deleteTaskAction(taskId: string): Promise<ActionState> {
+  const supabase = await createSupabaseServerClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+
+  // Delete with ownership check
+  const { error } = await supabase
+    .from("tasks")
+    .delete()
+    .eq("id", taskId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  return { success: true };
 }
