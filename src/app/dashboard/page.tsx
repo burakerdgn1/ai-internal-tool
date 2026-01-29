@@ -10,16 +10,11 @@ import { SummarizeButton } from "@/components/tasks/summarize-button";
 import { TaskActions } from "@/components/tasks/task-actions";
 import { EditTaskDialog } from "@/components/tasks/edit-task-dialog";
 import { CreateNoteDialog } from "@/components/notes/create-note-dialog";
+import { NoteActions } from "@/components/notes/note-actions";
 
 // UI
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sparkles, FileText, Code } from "lucide-react";
@@ -87,12 +82,6 @@ export default async function DashboardPage() {
               <TabsTrigger value="tasks">Tasks</TabsTrigger>
               <TabsTrigger value="notes">Notes</TabsTrigger>
             </TabsList>
-
-            {/* Context-aware actions could go here, but we keep dialogs specific to tabs for now 
-                or render the specific dialog based on active tab if we used client state.
-                For simplicity, we put the "New" buttons inside the TabContent or header. 
-                Here, I'll place them inside the content area for clear separation.
-            */}
           </div>
 
           {/* TASKS TAB */}
@@ -195,14 +184,22 @@ export default async function DashboardPage() {
                             {new Date(note.created_at).toLocaleDateString()}
                           </span>
                         </div>
-                        {note.is_technical && (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] h-5 px-1.5 border-blue-200 text-blue-700 dark:text-blue-400 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/10"
-                          >
-                            Technical
-                          </Badge>
-                        )}
+                        {/* Actions Row */}
+                        <div className="flex items-center gap-1">
+                          {note.is_technical && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] h-5 px-1.5 border-blue-200 text-blue-700 dark:text-blue-400 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/10 mr-1"
+                            >
+                              Tech
+                            </Badge>
+                          )}
+                          <NoteActions
+                            noteId={note.id}
+                            content={note.content}
+                            isTechnical={note.is_technical}
+                          />
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>

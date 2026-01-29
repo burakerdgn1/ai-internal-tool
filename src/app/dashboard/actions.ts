@@ -217,3 +217,59 @@ export async function createNote(
   revalidatePath("/dashboard");
   return { success: true };
 }
+
+export async function updateNoteAction(
+  noteId: string,
+  data: { content: string; is_technical: boolean },
+): Promise<ActionState> {
+  const supabase = await createSupabaseServerClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+
+  const content = (data.content ?? "").trim();
+
+  if (!content) {
+    return { error: "Content cannot be empty" };
+  }
+
+  const { error } = await supabase
+    .from("notes")
+    .update({
+      content,
+      is_technical: data.is_technical,
+    })
+    .eq("id", noteId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function deleteNoteAction(noteId: string): Promise<ActionState> {
+  const supabase = await createSupabaseServerClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+
+  const { error } = await supabase
+    .from("notes")
+    .delete()
+    .eq("id", noteId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  return { success: true };
+}
