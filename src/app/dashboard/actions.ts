@@ -110,10 +110,46 @@ export async function updateTaskStatusAction(
   } = await supabase.auth.getUser();
   if (!user) return { error: "Unauthorized" };
 
-  // Update with ownership check
   const { error } = await supabase
     .from("tasks")
     .update({ status })
+    .eq("id", taskId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function updateTaskAction(
+  taskId: string,
+  data: { title: string; description: string | null },
+): Promise<ActionState> {
+  const supabase = await createSupabaseServerClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+
+  const title = data.title.trim();
+  // Normalize description: empty string becomes null
+  const description = data.description?.trim() || null;
+
+  if (!title) {
+    return { error: "Title cannot be empty" };
+  }
+
+  const { error } = await supabase
+    .from("tasks")
+    .update({
+      title,
+      description,
+      ai_summary: null,
+    })
     .eq("id", taskId)
     .eq("user_id", user.id);
 
@@ -133,7 +169,6 @@ export async function deleteTaskAction(taskId: string): Promise<ActionState> {
   } = await supabase.auth.getUser();
   if (!user) return { error: "Unauthorized" };
 
-  // Delete with ownership check
   const { error } = await supabase
     .from("tasks")
     .delete()

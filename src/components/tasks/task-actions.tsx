@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, ReactNode } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { TaskStatus } from "@/lib/tasks";
 import {
@@ -31,17 +31,23 @@ import {
 interface TaskActionsProps {
   taskId: string;
   currentStatus: TaskStatus;
+  children?: ReactNode; // Accept custom actions like Edit button
 }
 
-export function TaskActions({ taskId, currentStatus }: TaskActionsProps) {
+export function TaskActions({
+  taskId,
+  currentStatus,
+  children,
+}: TaskActionsProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
 
-  const handleStatusChange = (value: TaskStatus) => {
+  const handleStatusChange = (value: string) => {
     setError("");
+    const newStatus = value as TaskStatus;
 
     startTransition(async () => {
-      const result = await updateTaskStatusAction(taskId, value);
+      const result = await updateTaskStatusAction(taskId, newStatus);
       if (result.error) {
         setError(result.error);
       }
@@ -64,7 +70,7 @@ export function TaskActions({ taskId, currentStatus }: TaskActionsProps) {
       <div className="flex-1">
         <Select
           disabled={isPending}
-          onValueChange={(v) => handleStatusChange(v as TaskStatus)}
+          onValueChange={handleStatusChange}
           defaultValue={currentStatus}
         >
           <SelectTrigger className="w-[140px] h-8 text-xs">
@@ -81,6 +87,9 @@ export function TaskActions({ taskId, currentStatus }: TaskActionsProps) {
 
       {/* Error Message Inline */}
       {error && <span className="text-xs text-red-500 mr-2">{error}</span>}
+
+      {/* Injected Actions (Edit Button) */}
+      {children}
 
       {/* Delete Button with Confirmation */}
       <AlertDialog>

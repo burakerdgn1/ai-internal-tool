@@ -1,47 +1,137 @@
-import Link from "next/link";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getUserTasks, TaskPriority } from "@/lib/tasks";
+import { signOut } from "@/app/(auth)/actions";
+import { CreateTaskDialog } from "@/components/tasks/create-task-dialog";
+import { SummarizeButton } from "@/components/tasks/summarize-button";
+import { TaskActions } from "@/components/tasks/task-actions";
+import { EditTaskDialog } from "@/components/tasks/edit-task-dialog";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Sparkles } from "lucide-react";
 
-type SearchParams = {
-  code?: string;
+// Helper for status badge colors
+const getPriorityBadgeVariant = (priority: TaskPriority) => {
+  switch (priority) {
+    case 3:
+      return "destructive"; // High
+    case 2:
+      return "default"; // Medium
+    default:
+      return "secondary"; // Low
+  }
 };
 
-export default async function HomePage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>;
-}) {
-  const sp = await searchParams;
+const getPriorityLabel = (priority: TaskPriority) => {
+  switch (priority) {
+    case 3:
+      return "High";
+    case 2:
+      return "Medium";
+    default:
+      return "Low";
+  }
+};
 
-  // Supabase email confirmation returns to "/?code=..."
-  // Forward it to our callback route to exchange the code for a session.
-  if (sp.code) {
-    redirect(`/auth/callback?code=${sp.code}`);
+export default async function DashboardPage() {
+  const supabase = await createSupabaseServerClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
   }
 
-  return (
-    <main className="min-h-screen">
-      <div className="mx-auto flex min-h-screen max-w-5xl flex-col justify-center gap-10 px-6 py-16">
-        <header className="space-y-4">
-          <p className="text-sm text-muted-foreground">Portfolio Project</p>
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-            AI-Powered Internal Tool
-          </h1>
-          <p className="max-w-2xl text-base text-muted-foreground sm:text-lg">
-            A production-grade internal dashboard template built with Next.js,
-            Supabase, and Gemini.
-          </p>
+  const tasks = await getUserTasks();
 
-          <div className="flex flex-wrap gap-3 pt-2">
-            <Button asChild>
-              <Link href="/login">Sign in</Link>
+  return (
+    <div className="min-h-screen bg-background p-8">
+      {/* Header */}
+      <header className="flex justify-between items-center mb-8 border-b pb-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground mt-1">
+            Welcome back, {user.email}
+          </p>
+        </div>
+        <div className="flex gap-4 items-center">
+          <CreateTaskDialog />
+          <form action={signOut}>
+            <Button variant="outline" type="submit">
+              Sign Out
             </Button>
-            <Button asChild variant="outline">
-              <Link href="/register">Create account</Link>
-            </Button>
+          </form>
+        </div>
+      </header>
+
+      {/* Task List */}
+      <main>
+        <h2 className="text-xl font-semibold mb-4">Your Tasks</h2>
+
+        {tasks.length === 0 ? (
+          <div className="text-center py-12 border rounded-lg border-dashed text-muted-foreground">
+            No tasks found. Create one to get started!
           </div>
-        </header>
-      </div>
-    </main>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {tasks.map((task) => (
+              <Card key={task.id} className="flex flex-col">
+                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+                  <div className="space-y-1">
+                    <CardTitle className="text-base font-medium leading-none">
+                      {task.title}
+                    </CardTitle>
+                    <span className="text-xs text-muted-foreground">
+                      Created {new Date(task.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <Badge variant={getPriorityBadgeVariant(task.priority)}>
+                    {getPriorityLabel(task.priority)}
+                  </Badge>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col pt-2">
+                  <p className="text-sm text-muted-foreground mb-4 line-clamp-3 min-h-[40px]">
+                    {task.description || "No description provided."}
+                  </p>
+
+                  {/* AI Summary Section */}
+                  <div className="mb-4">
+                    {task.ai_summary ? (
+                      <div className="bg-muted/50 p-3 rounded-md border text-sm animate-in fade-in zoom-in-95 duration-300">
+                        <div className="flex items-center gap-2 mb-1 text-primary">
+                          <Sparkles className="h-3 w-3" />
+                          <span className="text-xs font-semibold">
+                            AI Summary
+                          </span>
+                        </div>
+                        <p className="text-muted-foreground text-xs leading-relaxed">
+                          {task.ai_summary}
+                        </p>
+                      </div>
+                    ) : (
+                      <SummarizeButton taskId={task.id} />
+                    )}
+                  </div>
+
+                  {/* Actions & Status */}
+                  <div className="mt-auto">
+                    <TaskActions taskId={task.id} currentStatus={task.status}>
+                      <EditTaskDialog
+                        taskId={task.id}
+                        initialTitle={task.title}
+                        initialDescription={task.description}
+                      />
+                    </TaskActions>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
