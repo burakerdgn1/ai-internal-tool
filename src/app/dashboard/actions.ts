@@ -182,3 +182,38 @@ export async function deleteTaskAction(taskId: string): Promise<ActionState> {
   revalidatePath("/dashboard");
   return { success: true };
 }
+
+export async function createNote(
+  prevState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const supabase = await createSupabaseServerClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  const content = formData.get("content") as string;
+  // Checkbox value is 'on' if checked, null if not
+  const isTechnical = formData.get("is_technical") === "on";
+
+  if (!content || content.trim() === "") {
+    return { error: "Content is required" };
+  }
+
+  const { error } = await supabase.from("notes").insert({
+    user_id: user.id,
+    content: content.trim(),
+    is_technical: isTechnical,
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  return { success: true };
+}
