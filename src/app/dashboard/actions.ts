@@ -2,8 +2,9 @@
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { summarizeTaskText } from "@/lib/ai/gemini";
+import { answerFromNotes, summarizeTaskText } from "@/lib/ai/gemini";
 import { TaskPriority, TaskStatus } from "@/lib/tasks";
+import { Note } from "@/lib/notes";
 
 export type ActionState = {
   error?: string;
@@ -272,4 +273,104 @@ export async function deleteNoteAction(noteId: string): Promise<ActionState> {
 
   revalidatePath("/dashboard");
   return { success: true };
+}
+
+export async function askNotesAI(question: string) {
+  const supabase = await createSupabaseServerClient();
+
+  // 1. Auth Check
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "Unauthorized" };
+  }
+
+  // 2. Validate Question
+  const trimmedQuestion = question.trim();
+  if (trimmedQuestion.length < 5 || trimmedQuestion.length > 300) {
+    return { error: "Question must be between 5 and 300 characters." };
+  }
+
+  try {
+    // 3. Simple Keyword Extraction (Simple RAG)
+    // Split by space, remove punctuation, filter words >= 4 chars, take top 2
+    const keywords = trimmedQuestion
+      .replace(/[^\w\s]/gi, "")
+      .split(/\s+/)
+      .filter((w) => w.length >= 4)
+      .slice(0, 2);
+
+    // 4. Fetching Data
+    // We run two queries: specific keyword matches and recent notes to ensure context
+    const promises = [];
+
+    // A) Keyword Search (if keywords exist)
+    if (keywords.length > 0) {
+      // Create an OR string like: content.ilike.%word1%,content.ilike.%word2%
+      const orQuery = keywords.map((k) => `content.ilike.%${k}%`).join(",");
+      promises.push(
+        supabase
+          .from("notes")
+          .select("id, content, is_technical, created_at")
+          .eq("user_id", user.id)
+          .or(orQuery)
+          .limit(10),
+      );
+    }
+
+    // B) Recent Notes (Fallback/Supplement)
+    promises.push(
+      supabase
+        .from("notes")
+        .select("id, content, is_technical, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(10),
+    );
+
+    const results = await Promise.all(promises);
+
+    // 5. Merge and Deduplicate
+    const allNotes: Note[] = [];
+    const seenIds = new Set<string>();
+
+    // Flatten results (handle whether we had 1 or 2 queries)
+    results.forEach((res) => {
+      if (res.data) {
+        res.data.forEach((note: any) => {
+          if (!seenIds.has(note.id)) {
+            seenIds.add(note.id);
+            allNotes.push(note as Note);
+          }
+        });
+      }
+    });
+
+    // Take top 10 unique notes
+    const contextNotes = allNotes.slice(0, 10);
+
+    if (contextNotes.length === 0) {
+      return {
+        answer: "You don't have any notes yet to answer this question.",
+        usedNotes: [],
+      };
+    }
+
+    // 6. Call Gemini
+    const answer = await answerFromNotes(trimmedQuestion, contextNotes);
+
+    return {
+      answer,
+      usedNotes: contextNotes.map((n) => ({
+        id: n.id,
+        content: n.content,
+        is_technical: n.is_technical,
+        created_at: n.created_at,
+      })),
+    };
+  } catch (err) {
+    console.error("Ask AI Error:", err);
+    return { error: "Failed to process your question. Please try again." };
+  }
 }
