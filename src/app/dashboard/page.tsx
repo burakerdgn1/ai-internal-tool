@@ -11,13 +11,15 @@ import { TaskActions } from "@/components/tasks/task-actions";
 import { EditTaskDialog } from "@/components/tasks/edit-task-dialog";
 import { CreateNoteDialog } from "@/components/notes/create-note-dialog";
 import { NoteActions } from "@/components/notes/note-actions";
+import { DashboardControls } from "@/components/dashboard/dashboard-controls";
 
 // UI
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Sparkles, FileText, Code } from "lucide-react";
+import { Sparkles, FileText, Code, SearchX } from "lucide-react";
+import Link from "next/link";
 
 // Helper for status badge colors (Tasks)
 const getPriorityBadgeVariant = (priority: TaskPriority) => {
@@ -42,9 +44,12 @@ const getPriorityLabel = (priority: TaskPriority) => {
   }
 };
 
-export default async function DashboardPage() {
-  const supabase = await createSupabaseServerClient();
+type Props = {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+};
 
+export default async function DashboardPage({ searchParams }: Props) {
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -53,8 +58,34 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  // Parallel data fetching for performance
-  const [tasks, notes] = await Promise.all([getUserTasks(), getUserNotes()]);
+  // Await search params (Next.js 15 requirement)
+  const params = await searchParams;
+  const tab = params.tab === "notes" ? "notes" : "tasks";
+
+  // Parse Task Params
+  const taskSearch = typeof params.q === "string" ? params.q : undefined;
+  const taskStatusRaw =
+    typeof params.t_status === "string" ? params.t_status : "all";
+  const taskStatus =
+    taskStatusRaw === "TODO" ||
+    taskStatusRaw === "IN_PROGRESS" ||
+    taskStatusRaw === "DONE" ||
+    taskStatusRaw === "ARCHIVED"
+      ? taskStatusRaw
+      : "all";
+  const taskSort = params.t_sort === "oldest" ? "oldest" : "newest";
+
+  // Parse Note Params
+  const noteSearch = typeof params.nq === "string" ? params.nq : undefined;
+  const noteType =
+    typeof params.n_type === "string" ? params.n_type : undefined;
+  const noteSort = params.n_sort === "oldest" ? "oldest" : "newest";
+
+  // Parallel data fetching with filters
+  const [tasks, notes] = await Promise.all([
+    getUserTasks({ search: taskSearch, status: taskStatus, sort: taskSort }),
+    getUserNotes({ search: noteSearch, type: noteType, sort: noteSort }),
+  ]);
 
   return (
     <div className="min-h-screen bg-background p-8">
@@ -76,7 +107,7 @@ export default async function DashboardPage() {
       </header>
 
       <main>
-        <Tabs defaultValue="tasks" className="w-full">
+        <Tabs defaultValue={tab} className="w-full">
           <div className="flex justify-between items-center mb-6">
             <TabsList>
               <TabsTrigger value="tasks">Tasks</TabsTrigger>
@@ -86,131 +117,159 @@ export default async function DashboardPage() {
 
           {/* TASKS TAB */}
           <TabsContent value="tasks" className="space-y-4">
-            <div className="flex justify-end">
-              <CreateTaskDialog />
-            </div>
-
-            {tasks.length === 0 ? (
-              <div className="text-center py-12 border rounded-lg border-dashed text-muted-foreground">
-                No tasks found. Create one to get started!
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Manage Tasks</h2>
+                <CreateTaskDialog />
               </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {tasks.map((task) => (
-                  <Card key={task.id} className="flex flex-col">
-                    <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                      <div className="space-y-1">
-                        <CardTitle className="text-base font-medium leading-none">
-                          {task.title}
-                        </CardTitle>
-                        <span className="text-xs text-muted-foreground">
-                          Created{" "}
-                          {new Date(task.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <Badge variant={getPriorityBadgeVariant(task.priority)}>
-                        {getPriorityLabel(task.priority)}
-                      </Badge>
-                    </CardHeader>
-                    <CardContent className="flex-1 flex flex-col pt-2">
-                      <p className="text-sm text-muted-foreground mb-4 line-clamp-3 min-h-[40px]">
-                        {task.description || "No description provided."}
-                      </p>
 
-                      {/* AI Summary Section */}
-                      <div className="mb-4">
-                        {task.ai_summary ? (
-                          <div className="bg-muted/50 p-3 rounded-md border text-sm animate-in fade-in zoom-in-95 duration-300">
-                            <div className="flex items-center gap-2 mb-1 text-primary">
-                              <Sparkles className="h-3 w-3" />
-                              <span className="text-xs font-semibold">
-                                AI Summary
-                              </span>
+              <DashboardControls type="tasks" />
+
+              {tasks.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 border rounded-lg border-dashed text-muted-foreground bg-muted/10">
+                  {taskSearch || taskStatus ? (
+                    <>
+                      <SearchX className="h-10 w-10 mb-3 opacity-50" />
+                      <p>No tasks match your filters.</p>
+                      <Button variant="link" asChild className="mt-2">
+                        <Link href="/dashboard?tab=tasks">Clear Filters</Link>
+                      </Button>
+                    </>
+                  ) : (
+                    <p>No tasks found. Create one to get started!</p>
+                  )}
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {tasks.map((task) => (
+                    <Card key={task.id} className="flex flex-col">
+                      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+                        <div className="space-y-1">
+                          <CardTitle className="text-base font-medium leading-none">
+                            {task.title}
+                          </CardTitle>
+                          <span className="text-xs text-muted-foreground">
+                            Created{" "}
+                            {new Date(task.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <Badge variant={getPriorityBadgeVariant(task.priority)}>
+                          {getPriorityLabel(task.priority)}
+                        </Badge>
+                      </CardHeader>
+                      <CardContent className="flex-1 flex flex-col pt-2">
+                        <p className="text-sm text-muted-foreground mb-4 line-clamp-3 min-h-[40px]">
+                          {task.description || "No description provided."}
+                        </p>
+
+                        <div className="mb-4">
+                          {task.ai_summary ? (
+                            <div className="bg-muted/50 p-3 rounded-md border text-sm animate-in fade-in zoom-in-95 duration-300">
+                              <div className="flex items-center gap-2 mb-1 text-primary">
+                                <Sparkles className="h-3 w-3" />
+                                <span className="text-xs font-semibold">
+                                  AI Summary
+                                </span>
+                              </div>
+                              <p className="text-muted-foreground text-xs leading-relaxed">
+                                {task.ai_summary}
+                              </p>
                             </div>
-                            <p className="text-muted-foreground text-xs leading-relaxed">
-                              {task.ai_summary}
-                            </p>
-                          </div>
-                        ) : (
-                          <SummarizeButton taskId={task.id} />
-                        )}
-                      </div>
+                          ) : (
+                            <SummarizeButton taskId={task.id} />
+                          )}
+                        </div>
 
-                      <div className="mt-auto">
-                        <TaskActions
-                          taskId={task.id}
-                          currentStatus={task.status}
-                        >
-                          <EditTaskDialog
+                        <div className="mt-auto">
+                          <TaskActions
                             taskId={task.id}
-                            initialTitle={task.title}
-                            initialDescription={task.description}
-                          />
-                        </TaskActions>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+                            currentStatus={task.status}
+                          >
+                            <EditTaskDialog
+                              taskId={task.id}
+                              initialTitle={task.title}
+                              initialDescription={task.description}
+                            />
+                          </TaskActions>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
           </TabsContent>
 
           {/* NOTES TAB */}
           <TabsContent value="notes" className="space-y-4">
-            <div className="flex justify-end">
-              <CreateNoteDialog />
-            </div>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Your Notes</h2>
+                <CreateNoteDialog />
+              </div>
 
-            {notes.length === 0 ? (
-              <div className="text-center py-12 border rounded-lg border-dashed text-muted-foreground">
-                No notes found. Jot something down!
-              </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {notes.map((note) => (
-                  <Card
-                    key={note.id}
-                    className="flex flex-col bg-amber-50/50 dark:bg-zinc-900/50"
-                  >
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          {note.is_technical ? (
-                            <Code className="h-4 w-4 text-blue-500" />
-                          ) : (
-                            <FileText className="h-4 w-4" />
-                          )}
-                          <span className="text-xs">
-                            {new Date(note.created_at).toLocaleDateString()}
-                          </span>
+              <DashboardControls type="notes" />
+
+              {notes.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 border rounded-lg border-dashed text-muted-foreground bg-muted/10">
+                  {noteSearch || noteType ? (
+                    <>
+                      <SearchX className="h-10 w-10 mb-3 opacity-50" />
+                      <p>No notes match your filters.</p>
+                      <Button variant="link" asChild className="mt-2">
+                        <Link href="/dashboard?tab=notes">Clear Filters</Link>
+                      </Button>
+                    </>
+                  ) : (
+                    <p>No notes found. Jot something down!</p>
+                  )}
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  {notes.map((note) => (
+                    <Card
+                      key={note.id}
+                      className="flex flex-col bg-amber-50/50 dark:bg-zinc-900/50"
+                    >
+                      <CardHeader className="pb-2">
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            {note.is_technical ? (
+                              <Code className="h-4 w-4 text-blue-500" />
+                            ) : (
+                              <FileText className="h-4 w-4" />
+                            )}
+                            <span className="text-xs">
+                              {new Date(note.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {note.is_technical && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] h-5 px-1.5 border-blue-200 text-blue-700 dark:text-blue-400 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/10 mr-1"
+                              >
+                                Tech
+                              </Badge>
+                            )}
+                            <NoteActions
+                              noteId={note.id}
+                              content={note.content}
+                              isTechnical={note.is_technical}
+                            />
+                          </div>
                         </div>
-                        {/* Actions Row */}
-                        <div className="flex items-center gap-1">
-                          {note.is_technical && (
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] h-5 px-1.5 border-blue-200 text-blue-700 dark:text-blue-400 dark:border-blue-900 bg-blue-50 dark:bg-blue-900/10 mr-1"
-                            >
-                              Tech
-                            </Badge>
-                          )}
-                          <NoteActions
-                            noteId={note.id}
-                            content={note.content}
-                            isTechnical={note.is_technical}
-                          />
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm whitespace-pre-wrap line-clamp-6 leading-relaxed">
-                        {note.content}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm whitespace-pre-wrap line-clamp-6 leading-relaxed">
+                          {note.content}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </main>

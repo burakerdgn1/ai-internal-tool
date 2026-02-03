@@ -14,13 +14,42 @@ export type Task = {
   ai_summary: string | null;
 };
 
-export async function getUserTasks() {
+export type TaskFilterOptions = {
+  search?: string;
+  status?: "all" | TaskStatus;
+  sort?: "newest" | "oldest";
+};
+
+export async function getUserTasks(options: TaskFilterOptions = {}) {
   const supabase = await createSupabaseServerClient();
 
-  const { data, error } = await supabase
-    .from("tasks")
-    .select("*")
-    .order("created_at", { ascending: false });
+  let query = supabase.from("tasks").select("*");
+
+  // 1. Search (Title or Description)
+  if (options.search && options.search.trim()) {
+    const term = options.search.trim();
+    // Supabase .or() syntax for multi-column search
+    query = query.or(`title.ilike.%${term}%,description.ilike.%${term}%`);
+  }
+
+  // 2. Filter by Status
+  if (options.status && options.status !== "all") {
+    query = query.eq("status", options.status);
+  } else {
+    // Default behavior: don't show archived unless specifically asked or 'all'
+    // If 'all' is explicitly requested, we show archived too.
+    // If status is undefined (initial load), we usually hide archived.
+    // However, requirement says "all|TODO..." - let's assume 'all' includes everything.
+    if (!options.status) {
+      query = query.neq("status", "ARCHIVED");
+    }
+  }
+
+  // 3. Sort
+  const ascending = options.sort === "oldest";
+  query = query.order("created_at", { ascending });
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error fetching tasks:", error);
@@ -30,7 +59,7 @@ export async function getUserTasks() {
   return data as Task[];
 }
 
-// Helpers for Actions (Authentication/Authorization handles in Actions, but extra safety here is fine)
+// ... (Keep existing helpers: updateTaskStatus, deleteTask)
 export async function updateTaskStatus(taskId: string, status: TaskStatus) {
   const supabase = await createSupabaseServerClient();
   return await supabase.from("tasks").update({ status }).eq("id", taskId);
